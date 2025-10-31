@@ -155,7 +155,7 @@ export function Settings(props: SettingsProps) {
         <TextField
           value={selectedClusterData.subPath || ''}
           disabled={!isAddressFieldEnabled}
-          helperText="Optional subpath to the Prometheus Service endpoint. Only used when auto-detection is disabled. Examples: 'prometheus'."
+          helperText="Optional subpath to the Prometheus Service endpoint. Only used when auto-detection is disabled and subpath is not discovered via annotation. Examples: 'prometheus', 'select/0/prometheus' for VictoriaMetrics."
           onChange={e => {
             const newSubPath = e.target.value;
             onDataChange({

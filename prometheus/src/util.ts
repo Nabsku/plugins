@@ -415,9 +415,8 @@ export const getNodeClaimChartConfigs = (name: string, nodepool?: string) => [
     label: 'Creation Rate',
     icon: 'mdi:chart-line-variant',
     queries: {
-      nodeClaimCreationQuery: `sum(rate(karpenter_nodeclaims_created_total{nodepool="${
-        nodepool || 'all'
-      }"}[5m]))`,
+      nodeClaimCreationQuery: `sum(rate(karpenter_nodeclaims_created_total{nodepool="${nodepool || 'all'
+        }"}[5m]))`,
     },
     component: NodeClaimCreationChart,
   },

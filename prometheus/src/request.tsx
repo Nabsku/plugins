@@ -7,11 +7,13 @@ const COMMON_PROMETHEUS_POD_LABEL = 'app.kubernetes.io/name=prometheus';
 const COMMON_PROMETHEUS_SERVICE_LABEL =
   'app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server';
 const DEFAULT_PROMETHEUS_PORT = '9090';
+const DEFAULT_PROMETHEUS_SUBPATH = null;
 
 export type KubernetesPodListResponseItem = {
   metadata: {
     name: string;
     namespace: string;
+    annotations: { [key: string]: string }
   };
   spec: {
     containers: [
@@ -39,6 +41,7 @@ export type KubernetesServiceListResponseItem = {
   metadata: {
     name: string;
     namespace: string;
+    annotations: { [key: string]: string }
   };
   spec: {
     ports: [
@@ -69,6 +72,7 @@ export type PrometheusEndpoint = {
   name: string | undefined;
   namespace: string | undefined;
   port: string | undefined;
+  subPath?: string | undefined;
 };
 
 /**
@@ -77,19 +81,22 @@ export type PrometheusEndpoint = {
  * @param {string} name - The name of the Kubernetes resource.
  * @param {string} namespace - The namespace of the Kubernetes resource.
  * @param {string} port - The port of the Kubernetes resource.
+ * @param {subPath} subPath - The subPath of the Prometheus-compatible resource.
  * @returns {PrometheusEndpoint} - A new instance of PrometheusEndpoint.
  */
 export function createPrometheusEndpoint(
   type: KubernetesType = KubernetesType.none,
   name: string | undefined = undefined,
   namespace: string | undefined = undefined,
-  port: string | undefined = undefined
+  port: string | undefined = undefined,
+  subPath: string | undefined = DEFAULT_PROMETHEUS_SUBPATH
 ): PrometheusEndpoint {
   return {
     type,
     name,
     namespace,
     port,
+    subPath,
   };
 }
 
@@ -174,6 +181,8 @@ async function searchKubernetesByLabel(
     const prometheusName = metadata.name;
     const prometheusNamespace = metadata.namespace;
     const prometheusPorts = getPrometheusPortsFromResponse(searchResponseTyped);
+    const prometheusSubpath = metadata.annotations?.['headlamp.dev/prometheus-subpath'] || DEFAULT_PROMETHEUS_SUBPATH;
+    console.log(`Found SubPath: ${prometheusSubpath} for Prometheus ${prometheusName} in namespace ${prometheusNamespace}`);
 
     const testResults = await Promise.all(
       prometheusPorts.map(async prometheusPort => {
@@ -181,7 +190,8 @@ async function searchKubernetesByLabel(
           kubernetesType,
           prometheusName,
           prometheusNamespace,
-          prometheusPort
+          prometheusPort,
+          prometheusSubpath,
         );
         return {
           prometheusPort,
@@ -196,7 +206,8 @@ async function searchKubernetesByLabel(
           kubernetesType,
           prometheusName,
           prometheusNamespace,
-          result.prometheusPort
+          result.prometheusPort,
+          prometheusSubpath
         );
       }
     }
@@ -253,19 +264,20 @@ async function testPrometheusQuery(
   kubernetesType: KubernetesType,
   prometheusName: string,
   prometheusNamespace: string,
-  prometheusPort: string
+  prometheusPort: string,
+  prometheusSubPath?: string
 ): Promise<boolean> {
   const queryParams = new URLSearchParams();
   queryParams.append('query', 'up');
   const start = Math.floor(Date.now() / 1000);
   const testSuccess = await fetchMetrics({
-    prefix: `${prometheusNamespace}/${kubernetesType}/${prometheusName}${
-      prometheusPort ? `:${prometheusPort}` : ''
-    }`,
+    prefix: `${prometheusNamespace}/${kubernetesType}/${prometheusName}${prometheusPort ? `:${prometheusPort}` : ''
+      }`,
     query: 'up',
     from: start - 86400,
     to: start,
     step: 300,
+    subPath: prometheusSubPath,
   })
     .then(() => {
       return true;
@@ -317,9 +329,8 @@ export async function fetchMetrics(data: {
     if (data.subPath.endsWith('/')) {
       data.subPath = data.subPath.slice(0, -1);
     }
-    url = `/api/v1/namespaces/${data.prefix}/proxy/${
-      data.subPath
-    }/api/v1/query_range?${params.toString()}`;
+    url = `/api/v1/namespaces/${data.prefix}/proxy/${data.subPath
+      }/api/v1/query_range?${params.toString()}`;
   }
 
   const response = await request(url, {
