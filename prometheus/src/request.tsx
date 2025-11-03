@@ -3,6 +3,7 @@ import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
 const request = ApiProxy.request;
 
 const CUSTOM_HEADLAMP_LABEL = 'headlamp-prometheus=true';
+const CUSTOM_HEADLAMP_SUBPATH_ANNOTATION = 'plugins.headlamp.dev/prometheus-subpath'
 const COMMON_PROMETHEUS_POD_LABEL = 'app.kubernetes.io/name=prometheus';
 const COMMON_PROMETHEUS_SERVICE_LABEL =
   'app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server';
@@ -181,8 +182,7 @@ async function searchKubernetesByLabel(
     const prometheusName = metadata.name;
     const prometheusNamespace = metadata.namespace;
     const prometheusPorts = getPrometheusPortsFromResponse(searchResponseTyped);
-    const prometheusSubpath = metadata.annotations?.['headlamp.dev/prometheus-subpath'] || DEFAULT_PROMETHEUS_SUBPATH;
-    console.log(`Found SubPath: ${prometheusSubpath} for Prometheus ${prometheusName} in namespace ${prometheusNamespace}`);
+    const prometheusSubpath = metadata.annotations[CUSTOM_HEADLAMP_SUBPATH_ANNOTATION] || DEFAULT_PROMETHEUS_SUBPATH;
 
     const testResults = await Promise.all(
       prometheusPorts.map(async prometheusPort => {
