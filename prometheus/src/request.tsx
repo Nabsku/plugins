@@ -122,6 +122,8 @@ export async function isPrometheusInstalled(): Promise<PrometheusEndpoint> {
     CUSTOM_HEADLAMP_LABEL
   );
   if (serviceSearchSpecificResponse.type !== KubernetesType.none) {
+    console.log('Found Prometheus service with custom label.');
+    console.log(serviceSearchSpecificResponse);
     return serviceSearchSpecificResponse;
   }
   console.log('No Prometheus service found with custom label, searching common labels...');
@@ -170,6 +172,8 @@ async function searchKubernetesByLabel(
   const searchResponse = await request(`/api/v1/${kubernetesType}?${queryParams}`, {
     method: 'GET',
   });
+
+  console.log(`Kubernetes ${kubernetesType} search response status: ${searchResponse.status}`);
 
   if (!searchResponse?.kind || ['PodList', 'ServiceList'].indexOf(searchResponse.kind) === -1) {
     return createPrometheusEndpoint();
@@ -243,6 +247,7 @@ function getPrometheusPortsFromResponse(response: KubernetesSearchResponse): str
     for (const item of response.items) {
       for (const port of item.spec.ports) {
         if (port.protocol === 'TCP') {
+          console.log(`Found service port: ${port.port}`);
           ports.push(String(port.port));
         }
       }
@@ -289,6 +294,8 @@ async function testPrometheusQuery(
     .catch(() => {
       return false;
     });
+
+  console.log(`Prometheus test query result for ${prometheusName} in namespace ${prometheusNamespace} on port ${prometheusPort}: ${testSuccess}`);
 
   return testSuccess;
 }

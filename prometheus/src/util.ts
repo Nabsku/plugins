@@ -110,7 +110,9 @@ export async function getPrometheusPrefix(cluster: string): Promise<string | nul
   const clusterData = getClusterConfig(cluster);
   if (clusterData?.autoDetect) {
     const prometheusEndpoint = await isPrometheusInstalled();
+    console.log('Detected Prometheus endpoint:', prometheusEndpoint);
     if (prometheusEndpoint.type === KubernetesType.none) {
+      console.warn('Prometheus not detected in the cluster');
       return null;
     }
     const prometheusPortStr = prometheusEndpoint.port ? `:${prometheusEndpoint.port}` : '';
