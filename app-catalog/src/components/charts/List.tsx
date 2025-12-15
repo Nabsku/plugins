@@ -5,7 +5,9 @@ import {
   Loader,
   SectionHeader,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { HoverInfoLabel } from '@kinvolk/headlamp-plugin/lib/components/common';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -13,19 +15,20 @@ import {
   CardContent,
   CardMedia,
   Divider,
+  FormControlLabel,
   Link,
+  Pagination,
+  Switch,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { Autocomplete, Pagination } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { getCatalogConfig } from '../../api/catalogConfig';
 import { fetchChartIcon, fetchChartsFromArtifact } from '../../api/charts';
 import { PAGE_OFFSET_COUNT_FOR_CHARTS, VANILLA_HELM_REPO } from '../../constants/catalog';
 import { AvailableComponentVersions } from '../../helpers/catalog';
 import { EditorDialog } from './EditorDialog';
-import { SettingsLink } from './SettingsLink';
 
 interface AppCatalogConfig {
   /**
@@ -132,6 +135,34 @@ function CategoryForCharts({
   );
 }
 
+interface OnlyVerifiedSwitchProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+function OnlyVerifiedSwitch({ checked, onChange }: OnlyVerifiedSwitchProps) {
+  return (
+    <FormControlLabel
+      control={
+        <Switch
+          size="small"
+          checked={checked}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+            onChange(event.target.checked);
+          }}
+        />
+      }
+      sx={{ gap: 1 }}
+      label={
+        <HoverInfoLabel
+          label="Only verified"
+          hoverInfo="Show charts from verified publishers only"
+        />
+      }
+    />
+  );
+}
+
 export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
   const helmChartCategoryList = [
     { title: 'All', value: 0 },
@@ -153,8 +184,8 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
   const [selectedChartForInstall, setSelectedChartForInstall] = useState<any | null>(null);
   const [iconUrls, setIconUrls] = useState<{ [url: string]: string }>({}); // New state for multiple icon URLs
 
-  // note: since we default to true for showOnlyVerified and the settings page is not accessible from anywhere else but the list comp
-  // we must have the default value here and have it imported for use in the settings tab
+  // Keep the config in sync so both the main page toggle and the settings view share the same value.
+  // Default to true when no user preference has been stored yet.
   const config = useStoreConfig();
   const showOnlyVerified = config?.showOnlyVerified ?? true;
   const chartCfg = getCatalogConfig();
@@ -178,12 +209,12 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
             // Capture available versions from the response and set AVAILABLE_VERSIONS
             globalThis.AVAILABLE_VERSIONS = AvailableComponentVersions(data.entries);
           } else {
-            setCharts(data.packages);
+            setCharts(Object.fromEntries(data.packages.map((chart: any) => [chart.name, chart])));
             setChartsTotalCount(parseInt(total));
           }
         } catch (err) {
           console.error('Error fetching charts', err);
-          setCharts([]);
+          setCharts({});
         }
       }
       fetchData();
@@ -273,7 +304,17 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
       />
       <SectionHeader
         title="Applications"
-        titleSideActions={[<SettingsLink />]}
+        titleSideActions={[
+          <Box key="verified-switch" pl={2}>
+            <OnlyVerifiedSwitch
+              checked={showOnlyVerified}
+              onChange={(isChecked: boolean) => {
+                store.set({ showOnlyVerified: isChecked });
+                setPage(1);
+              }}
+            />
+          </Box>,
+        ]}
         actions={[
           <Search search={search} setSearch={setSearch} />,
           <CategoryForCharts
@@ -302,11 +343,14 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
           </Box>
         ) : (
           <Box
-            display="flex"
-            m={1}
             sx={{
-              flexWrap: 'wrap',
-              flexDirection: { sm: 'column', md: 'row' },
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: 'repeat(auto-fit, minmax(260px, 1fr))',
+                md: 'repeat(auto-fit, minmax(320px, 1fr))',
+              },
+              gap: 3,
+              m: 2,
             }}
           >
             {
@@ -330,15 +374,10 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                     <Card
                       key={`${chart.name}-${chart.version}`}
                       sx={{
-                        margin: '1rem',
                         display: 'flex',
                         flexDirection: 'column',
                         height: '100%',
-                        boxShadow: '0px 0px 5px 0px rgba(0,0,0,0.5)',
-                        width: {
-                          md: '40%',
-                          lg: '30%',
-                        },
+                        boxShadow: 3,
                       }}
                     >
                       <Box
@@ -354,9 +393,9 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                                 image={iconUrls[chart.icon]}
                                 alt={`${chart.name} logo`}
                                 sx={{
-                                  width: '60px',
-                                  height: '60px',
-                                  margin: '1rem',
+                                  width: 60,
+                                  height: 60,
+                                  m: 2,
                                   alignSelf: 'flex-start',
                                   objectFit: 'contain',
                                 }}
@@ -368,9 +407,9 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                                 image={`https://artifacthub.io/image/${chart.logo_image_id}`}
                                 alt={`${chart.name} logo`}
                                 sx={{
-                                  width: '60px',
-                                  height: '60px',
-                                  margin: '1rem',
+                                  width: 60,
+                                  height: 60,
+                                  m: 2,
                                   alignSelf: 'flex-start',
                                   objectFit: 'contain',
                                 }}
@@ -420,17 +459,17 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                       </Box>
                       <CardContent
                         sx={{
-                          margin: '1rem 0rem',
-                          height: '10vh',
-                          overflow: 'hidden',
-                          paddingTop: 0,
+                          my: 2,
+                          pt: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 1,
+                          flexGrow: 1,
                         }}
                       >
                         <Box
                           sx={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
+                            wordBreak: 'break-word',
                           }}
                         >
                           <Tooltip title={chart.name}>
@@ -463,9 +502,7 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                           <Box
                             marginLeft={1}
                             sx={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              wordBreak: 'break-word',
                             }}
                           >
                             <Tooltip title={chart?.repository?.name || ''}>
@@ -475,7 +512,16 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                         </Box>
                         <Divider />
                         <Box mt={1}>
-                          <Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              wordBreak: 'break-word',
+                              minHeight: '72px',
+                              maxHeight: '72px',
+                            }}
+                          >
                             {chart?.description?.slice(0, 100)}
                             {chart?.description?.length > 100 && (
                               <Tooltip title={chart?.description}>
@@ -488,7 +534,11 @@ export function ChartsList({ fetchCharts = fetchChartsFromArtifact }) {
                       <CardActions
                         sx={{
                           justifyContent: 'space-between',
-                          padding: '14px',
+                          px: 3,
+                          py: 2,
+                          gap: 1,
+                          flexWrap: 'wrap',
+                          mt: 'auto',
                         }}
                       >
                         <Button
