@@ -112,6 +112,8 @@ export async function isPrometheusInstalled(): Promise<PrometheusEndpoint> {
     CUSTOM_HEADLAMP_LABEL
   );
   if (podSearchSpecificResponse.type !== KubernetesType.none) {
+    console.log('Found Prometheus pod with custom label.');
+    console.log(podSearchSpecificResponse);
     return podSearchSpecificResponse;
   }
   console.log('No Prometheus pod found with custom label, searching for service...');
@@ -169,6 +171,8 @@ async function searchKubernetesByLabel(
   const queryParams = new URLSearchParams();
   queryParams.append('labelSelector', labelSelector);
 
+  console.log(`Searching for Kubernetes ${kubernetesType} with label selector: ${labelSelector}`);
+
   const searchResponse = await request(`/api/v1/${kubernetesType}?${queryParams}`, {
     method: 'GET',
   });
@@ -176,24 +180,37 @@ async function searchKubernetesByLabel(
   console.log(`Kubernetes ${kubernetesType} search response status: ${searchResponse.status}`);
 
   if (!searchResponse?.kind || ['PodList', 'ServiceList'].indexOf(searchResponse.kind) === -1) {
+    console.log(`Kubernetes ${kubernetesType} search response kind is invalid.`);
     return createPrometheusEndpoint();
   }
 
   const searchResponseTyped = searchResponse as KubernetesSearchResponse;
+  console.log(`Kubernetes ${kubernetesType} search response kind: ${searchResponseTyped.kind}, items found: ${searchResponseTyped.items?.length || 0}`);
 
   if (searchResponseTyped.items?.length > 0) {
     const metadata = searchResponseTyped.items[0].metadata;
     if (!metadata) {
+      console.log(`Kubernetes ${kubernetesType} search response metadata is missing.`);
       return createPrometheusEndpoint();
     }
+    console.log(`Found Kubernetes ${kubernetesType} named ${metadata.name} in namespace ${metadata.namespace}.`);
 
     const prometheusName = metadata.name;
     const prometheusNamespace = metadata.namespace;
     const prometheusPorts = getPrometheusPortsFromResponse(searchResponseTyped);
-    const prometheusSubpath = metadata.annotations[CUSTOM_HEADLAMP_SUBPATH_ANNOTATION] || DEFAULT_PROMETHEUS_SUBPATH;
+    let prometheusSubpath = DEFAULT_PROMETHEUS_SUBPATH;
+
+    if (metadata.annotations) {
+      if (metadata.annotations[CUSTOM_HEADLAMP_SUBPATH_ANNOTATION]) {
+        prometheusSubpath = metadata.annotations[CUSTOM_HEADLAMP_SUBPATH_ANNOTATION];
+      }
+    }
+
+    console.log(`Using Prometheus subPath: ${prometheusSubpath}`);
 
     const testResults = await Promise.all(
       prometheusPorts.map(async prometheusPort => {
+        console.log(`Testing Prometheus at ${prometheusName} in namespace ${prometheusNamespace} on port ${prometheusPort}.`);
         const testSuccess = await testPrometheusQuery(
           kubernetesType,
           prometheusName,
@@ -210,6 +227,7 @@ async function searchKubernetesByLabel(
 
     for (const result of testResults) {
       if (result.testSuccess) {
+        console.log(`Prometheus is reachable at ${prometheusName} in namespace ${prometheusNamespace} on port ${result.prometheusPort}.`);
         return createPrometheusEndpoint(
           kubernetesType,
           prometheusName,
@@ -218,6 +236,7 @@ async function searchKubernetesByLabel(
           prometheusSubpath
         );
       }
+      console.log(`Prometheus is not reachable at ${prometheusName} in namespace ${prometheusNamespace} on port ${result.prometheusPort}.`);
     }
   }
 
@@ -237,6 +256,7 @@ function getPrometheusPortsFromResponse(response: KubernetesSearchResponse): str
       for (const container of item.spec.containers) {
         for (const port of container.ports) {
           if (port.protocol === 'TCP') {
+            console.log(`Found pod port: ${port.containerPort}`);
             ports.push(String(port.containerPort));
           }
         }
@@ -259,6 +279,7 @@ function getPrometheusPortsFromResponse(response: KubernetesSearchResponse): str
     ports.push(DEFAULT_PROMETHEUS_PORT);
   }
 
+  console.log(`Prometheus ports found: ${ports}`);
   return ports;
 }
 
@@ -279,6 +300,8 @@ async function testPrometheusQuery(
   const queryParams = new URLSearchParams();
   queryParams.append('query', 'up');
   const start = Math.floor(Date.now() / 1000);
+
+  console.log(`Testing Prometheus query for ${prometheusName} in namespace ${prometheusNamespace} on port ${prometheusPort}`);
   const testSuccess = await fetchMetrics({
     prefix: `${prometheusNamespace}/${kubernetesType}/${prometheusName}${prometheusPort ? `:${prometheusPort}` : ''
       }`,
@@ -332,6 +355,7 @@ export async function fetchMetrics(data: {
   if (data.query) {
     params.append('query', data.query);
   }
+  console.log('Fetching metrics with params:', params.toString());
   var url = `/api/v1/namespaces/${data.prefix}/proxy/api/v1/query_range?${params.toString()}`;
   if (data.subPath && data.subPath !== '') {
     if (data.subPath.startsWith('/')) {
@@ -343,14 +367,17 @@ export async function fetchMetrics(data: {
     url = `/api/v1/namespaces/${data.prefix}/proxy/${data.subPath
       }/api/v1/query_range?${params.toString()}`;
   }
+  console.log('Fetching metrics from URL:', url);
 
   const response = await request(url, {
     method: 'GET',
     isJSON: false,
   });
   if (response.status === 200) {
+    console.log('Metrics fetched successfully');
     return response.json();
   } else {
+    console.error('Error fetching metrics:', response.statusText);
     const error = new Error(response.statusText);
     return Promise.reject(error);
   }
