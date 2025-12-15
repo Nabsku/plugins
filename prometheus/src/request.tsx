@@ -114,6 +114,7 @@ export async function isPrometheusInstalled(): Promise<PrometheusEndpoint> {
   if (podSearchSpecificResponse.type !== KubernetesType.none) {
     return podSearchSpecificResponse;
   }
+  console.log('No Prometheus pod found with custom label, searching for service...');
 
   // Search by a custom label for a service
   const serviceSearchSpecificResponse = await searchKubernetesByLabel(
@@ -123,6 +124,7 @@ export async function isPrometheusInstalled(): Promise<PrometheusEndpoint> {
   if (serviceSearchSpecificResponse.type !== KubernetesType.none) {
     return serviceSearchSpecificResponse;
   }
+  console.log('No Prometheus service found with custom label, searching common labels...');
 
   // Search by common label for a pod
   const podSearchResponse = await searchKubernetesByLabel(
@@ -132,6 +134,7 @@ export async function isPrometheusInstalled(): Promise<PrometheusEndpoint> {
   if (podSearchResponse.type !== KubernetesType.none) {
     return podSearchResponse;
   }
+  console.log('No Prometheus pod found with common label, searching for service...');
 
   // Search by common label for a service
   const serviceSearchResponse = await searchKubernetesByLabel(
@@ -141,6 +144,7 @@ export async function isPrometheusInstalled(): Promise<PrometheusEndpoint> {
   if (serviceSearchResponse.type !== KubernetesType.none) {
     return serviceSearchResponse;
   }
+  console.log('No Prometheus service found with common label.');
 
   // No Prometheus pod or service found
   return createPrometheusEndpoint();
