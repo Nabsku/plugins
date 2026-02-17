@@ -102,67 +102,106 @@ export default class LangChainManager extends AIManager {
     return this.promptTemplate.pipe(modelToUse).pipe(this.outputParser);
   }
 
+  /**
+   * Extract the base URL from an Azure OpenAI endpoint.
+   * Users may paste the full API URL (e.g., https://xxx.openai.azure.com/openai/v1/chat/completions)
+   * but the SDK expects only the base URL (e.g., https://xxx.openai.azure.com).
+   */
+  private extractAzureBaseUrl(endpoint: string): string {
+    try {
+      const url = new URL(endpoint);
+      // Return only the origin (protocol + host), stripping any path
+      return url.origin;
+    } catch {
+      // If URL parsing fails, fall back to stripping trailing slashes
+      return endpoint.replace(/\/+$/, '');
+    }
+  }
+
   private createModel(providerId: string, config: Record<string, any>): BaseChatModel {
+    const sanitizeString = (value: unknown): string =>
+      typeof value === 'string' ? value.trim() : '';
+    const sanitizedConfig = {
+      ...config,
+      apiKey: sanitizeString(config.apiKey),
+      endpoint: sanitizeString(config.endpoint),
+      baseUrl: sanitizeString(config.baseUrl),
+      deploymentName: sanitizeString(config.deploymentName),
+      model: sanitizeString(config.model),
+    };
+
     try {
       switch (providerId) {
         case 'openai':
-          if (!config.apiKey) {
+          if (!sanitizedConfig.apiKey) {
             throw new Error('API key is required for OpenAI');
           }
           return new ChatOpenAI({
-            apiKey: config.apiKey,
-            modelName: config.model,
+            apiKey: sanitizedConfig.apiKey,
+            model: sanitizedConfig.model,
             verbose: true,
           });
         case 'azure':
-          if (!config.apiKey || !config.endpoint || !config.deploymentName) {
+          if (
+            !sanitizedConfig.apiKey ||
+            !sanitizedConfig.endpoint ||
+            !sanitizedConfig.deploymentName
+          ) {
             throw new Error('Incomplete Azure OpenAI configuration');
           }
           return new AzureChatOpenAI({
-            azureOpenAIEndpoint: config.endpoint.replace(/\/+\$/, ''),
-            azureOpenAIApiKey: config.apiKey,
-            azureOpenAIApiDeploymentName: config.deploymentName,
-            azureOpenAIApiVersion: '2024-12-01-preview',
-            modelName: config.model,
+            // Extract only the base URL (protocol + host), stripping any path
+            // e.g. "https://xxx.openai.azure.com/openai/v1/chat/completions" → "https://xxx.openai.azure.com"
+            azureOpenAIEndpoint: this.extractAzureBaseUrl(sanitizedConfig.endpoint),
+            azureOpenAIApiKey: sanitizedConfig.apiKey,
+            azureOpenAIApiDeploymentName: sanitizedConfig.deploymentName,
+            azureOpenAIApiVersion: '2025-04-01-preview',
+            model: sanitizedConfig.model,
             verbose: true,
           });
         case 'anthropic':
-          if (!config.apiKey) {
+          if (!sanitizedConfig.apiKey) {
             throw new Error('API key is required for Anthropic');
           }
           return new ChatAnthropic({
-            apiKey: config.apiKey,
-            modelName: config.model,
+            apiKey: sanitizedConfig.apiKey,
+            model: sanitizedConfig.model,
             verbose: true,
           });
         case 'mistral':
-          if (!config.apiKey) {
+          if (!sanitizedConfig.apiKey) {
             throw new Error('API key is required for Mistral AI');
           }
           return new ChatMistralAI({
-            apiKey: config.apiKey,
-            modelName: config.model,
+            apiKey: sanitizedConfig.apiKey,
+            model: sanitizedConfig.model,
             verbose: true,
           });
         case 'gemini': {
-          if (!config.apiKey) {
+          if (!sanitizedConfig.apiKey) {
             throw new Error('API key is required for Google Gemini');
           }
           return new ChatGoogleGenerativeAI({
-            apiKey: config.apiKey,
-            model: config.model,
+            apiKey: sanitizedConfig.apiKey,
+            model: sanitizedConfig.model,
             verbose: true,
           });
         }
-        case 'local':
-          if (!config.baseUrl) {
+        case 'local': {
+          if (!sanitizedConfig.baseUrl) {
             throw new Error('Base URL is required for local models');
           }
+          const headers: Record<string, string> = {};
+          if (sanitizedConfig.apiKey) {
+            headers['Authorization'] = `Bearer ${sanitizedConfig.apiKey}`;
+          }
           return new ChatOllama({
-            baseUrl: config.baseUrl,
-            model: config.model,
+            baseUrl: sanitizedConfig.baseUrl,
+            model: sanitizedConfig.model,
             verbose: true,
+            headers: Object.keys(headers).length ? headers : undefined,
           });
+        }
         default:
           throw new Error(`Unsupported provider: ${providerId}`);
       }

@@ -72,8 +72,9 @@ export const modelProviders: ModelProvider[] = [
         label: 'Endpoint',
         type: 'text',
         required: true,
-        placeholder: 'https://your-resource.openai.azure.com/',
-        description: 'The full URL to your Azure OpenAI resource',
+        placeholder: 'https://your-resource.openai.azure.com',
+        description:
+          'The base URL of your Azure OpenAI resource (e.g. https://your-resource.openai.azure.com). Do NOT include any path like /openai/v1/chat/completions.',
       },
       {
         name: 'deploymentName',
@@ -188,6 +189,13 @@ export const modelProviders: ModelProvider[] = [
     icon: 'ai-providers:local',
     description: 'Integration with locally hosted models (Ollama or similar)',
     fields: [
+      {
+        name: 'apiKey',
+        label: 'API Key',
+        type: 'text',
+        required: false,
+        placeholder: 'Your Local Model API key',
+      },
       {
         name: 'baseUrl',
         label: 'Base URL',
